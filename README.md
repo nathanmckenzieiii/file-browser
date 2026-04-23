@@ -95,8 +95,9 @@ A full-stack web application for browsing, searching, and managing files and dir
    dotnet run
    ```
 
-3. **Access the application:**
-   Open your browser and navigate to `https://localhost:5001` (or the configured HTTPS port)
+3. **Access the application:**  
+   Open your browser and navigate to `https://localhost:5001` (or the configured HTTPS port)  
+   *The file browser will open with sample files in the SampleFiles directory*
 
 ### Configuration
 

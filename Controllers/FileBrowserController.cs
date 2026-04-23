@@ -265,24 +265,31 @@ namespace TestProject.Controllers {
             }
         }
 
-        private string ResolvePath(string relativePath) {
-            if (string.IsNullOrWhiteSpace(relativePath) || relativePath == "/") {
-                return _homeDirectory;
+        private string ResolvePath(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath) || relativePath == "/")
+            {
+                return Path.GetFullPath(_homeDirectory);
             }
 
             var fullPath = Path.Combine(_homeDirectory, relativePath.TrimStart('/'));
             var resolvedPath = Path.GetFullPath(fullPath);
+            var normalizedHome = Path.GetFullPath(_homeDirectory);
 
-            if (!resolvedPath.StartsWith(_homeDirectory)) {
+            if (!resolvedPath.StartsWith(normalizedHome, StringComparison.OrdinalIgnoreCase))
+            {
                 throw new UnauthorizedAccessException("Access to this path is not allowed");
             }
 
             return resolvedPath;
         }
 
-        private string GetRelativePath(string fullPath) {
-            if (fullPath.StartsWith(_homeDirectory)) {
-                return fullPath[_homeDirectory.Length..].TrimStart('\\', '/');
+        private string GetRelativePath(string fullPath)
+        {
+            var normalizedHome = Path.GetFullPath(_homeDirectory);
+            if (fullPath.StartsWith(normalizedHome, StringComparison.OrdinalIgnoreCase))
+            {
+                return fullPath[normalizedHome.Length..].TrimStart('\\', '/');
             }
 
             return fullPath;

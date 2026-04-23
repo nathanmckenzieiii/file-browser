@@ -95,10 +95,11 @@ class FileBrowser {
             const data = await response.json();
             console.log("Directory data:", data);
             this.renderBrowse(data);
-            this.updateUrl();
+            return Promise.resolve();  // ← Add this
         } catch (error) {
             console.error("Error loading directory:", error);
             this.showError(error.message || "Unknown error");
+            return Promise.reject(error);  // ← Add this
         } finally {
             this.showLoading(false);
         }
@@ -379,15 +380,25 @@ class FileBrowser {
 
     navigateToFolder(folderName) {
         const newPath = this.currentPath ? `${this.currentPath}/${folderName}` : folderName;
+        const oldPath = this.currentPath;
         this.currentPath = newPath;
-        this.updateUrl();
-        this.loadDirectory();
+
+        this.loadDirectory().catch(() => {
+            this.currentPath = oldPath;
+        }).finally(() => {
+            this.updateUrl();
+        });
     }
 
     navigateToPath(path) {
+        const oldPath = this.currentPath;
         this.currentPath = path;
-        this.updateUrl();
-        this.loadDirectory();
+
+        this.loadDirectory().catch(() => {
+            this.currentPath = oldPath;
+        }).finally(() => {
+            this.updateUrl();
+        });
     }
 
     async downloadFile(fileName) {
