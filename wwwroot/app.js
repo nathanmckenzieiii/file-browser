@@ -186,15 +186,12 @@ class FileBrowser {
             this.showLoading(true);
             this.hideError();
 
-            const folderPath = this.currentPath ? `${this.currentPath}/${folderName}` : folderName;
-            const fullPath = folderPath.split("/").filter(p => p).join("/");
-
-            const response = await fetch(`${this.apiBaseUrl}/browse?path=${encodeURIComponent(fullPath)}`, {
+            const response = await fetch(`${this.apiBaseUrl}/createfolder?folderName=${encodeURIComponent(folderName)}&path=${encodeURIComponent(this.currentPath)}`, {
                 method: "POST"
             });
 
             if (!response.ok) {
-                throw new Error("Folder creation via API not implemented");
+                throw new Error("Failed to create folder");
             }
 
             await this.loadDirectory();

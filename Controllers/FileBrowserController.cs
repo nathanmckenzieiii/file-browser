@@ -265,6 +265,35 @@ namespace TestProject.Controllers {
             }
         }
 
+        [HttpPost("createfolder")]
+        public ActionResult CreateFolder([FromQuery] string folderName, [FromQuery] string path = "")
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(folderName))
+                {
+                    return BadRequest(new { message = "Folder name cannot be empty" });
+                }
+
+                var fullPath = ResolvePath(path);
+                var newFolderPath = Path.Combine(fullPath, folderName);
+
+                if (Directory.Exists(newFolderPath))
+                {
+                    return BadRequest(new { message = "Folder already exists" });
+                }
+
+                Directory.CreateDirectory(newFolderPath);
+
+                return Ok(new { message = "Folder created successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating folder: {FolderName} in path: {Path}", folderName, path);
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         private string ResolvePath(string relativePath)
         {
             if (string.IsNullOrWhiteSpace(relativePath) || relativePath == "/")
