@@ -1,0 +1,77 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File Browser</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="trigger-container">
+        <button id="openBrowserBtn" class="trigger-btn">📁 Open File Browser</button>
+    </div>
+
+    <div id="fileBrowserModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>File Browser</h2>
+                <button id="closeModal" class="close-btn">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="sidebar">
+                    <div class="search-section">
+                        <input type="text" id="searchInput" placeholder="Search files..." />
+                        <button id="searchBtn" class="action-btn">Search</button>
+                        <button id="clearSearchBtn" class="action-btn secondary">Clear</button>
+                    </div>
+
+                    <div class="upload-section">
+                        <input type="file" id="fileInput" multiple style="display: none;" />
+                        <button id="uploadBtn" class="action-btn">📤 Upload</button>
+                        <button id="newFolderBtn" class="action-btn">📁 New Folder</button>
+                    </div>
+
+                    <div class="navigation-section">
+                        <div class="breadcrumb" id="breadcrumb"></div>
+                    </div>
+
+                    <div class="stats-section">
+                        <div class="stat">
+                            <span class="stat-label">Files:</span>
+                            <span class="stat-value" id="fileCount">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Folders:</span>
+                            <span class="stat-value" id="folderCount">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Total Size:</span>
+                            <span class="stat-value" id="totalSize">0 B</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="content-area">
+                    <div id="folderContainer" class="items-container">
+                        <!-- Folders will be rendered here -->
+                    </div>
+
+                    <div id="fileContainer" class="items-container">
+                        <!-- Files will be rendered here -->
+                    </div>
+
+                    <div id="searchResults" class="items-container hidden">
+                        <!-- Search results will be rendered here -->
+                    </div>
+
+                    <div id="loadingIndicator" class="loading-indicator hidden">Loading...</div>
+                    <div id="errorMessage" class="error-message hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
