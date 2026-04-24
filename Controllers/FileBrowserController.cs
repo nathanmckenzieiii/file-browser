@@ -318,10 +318,10 @@ namespace TestProject.Controllers {
             var normalizedHome = Path.GetFullPath(_homeDirectory);
             if (fullPath.StartsWith(normalizedHome, StringComparison.OrdinalIgnoreCase))
             {
-                return fullPath[normalizedHome.Length..].TrimStart('\\', '/');
+                return fullPath[normalizedHome.Length..].TrimStart('\\', '/').Replace("\\", "/");
             }
 
-            return fullPath;
+            return fullPath.Replace("\\", "/");
         }
 
         private static void CopyDirectory(string source, string destination) {
