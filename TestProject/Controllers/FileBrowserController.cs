@@ -64,6 +64,12 @@ namespace TestProject.Controllers {
                     return BadRequest(new { message = "Search query cannot be empty" });
                 }
 
+                // EnumerateFiles splits a pattern containing separators into directory + pattern,
+                // which would let the query walk outside the search root.
+                if (query.IndexOfAny(InvalidNameChars) >= 0) {
+                    return BadRequest(new { message = "Search query cannot contain path characters" });
+                }
+
                 var fullPath = ResolvePath(path);
 
                 if (!Directory.Exists(fullPath)) {
@@ -129,8 +135,9 @@ namespace TestProject.Controllers {
 
                 foreach (var file in files) {
                     if (file.Length > 0) {
-                        var filePath = Path.Combine(fullPath, file.FileName);
-                        var fileName = Path.GetFileName(filePath);
+                        // The client controls FileName; keep only the last segment, then validate it.
+                        var fileName = Path.GetFileName(file.FileName.Replace('\\', '/'));
+                        var filePath = ResolveItemPath(fullPath, fileName);
                         var counter = 1;
 
                         while (System.IO.File.Exists(filePath)) {
@@ -166,14 +173,14 @@ namespace TestProject.Controllers {
         public ActionResult Download([FromQuery] string file, [FromQuery] string path = "") {
             try {
                 var fullPath = ResolvePath(path);
-                var filePath = Path.Combine(fullPath, file);
+                var filePath = ResolveItemPath(fullPath, file);
 
                 if (!System.IO.File.Exists(filePath)) {
                     return NotFound(new { message = "File not found" });
                 }
 
                 var fileBytes = System.IO.File.ReadAllBytes(filePath);
-                return File(fileBytes, "application/octet-stream", file);
+                return File(fileBytes, "application/octet-stream", Path.GetFileName(filePath));
             } catch (Exception ex) {
                 _logger.LogError(ex, "Error downloading file: {File} from path: {Path}", file, path);
                 return BadRequest(new { message = ex.Message });
@@ -184,7 +191,7 @@ namespace TestProject.Controllers {
         public ActionResult Delete([FromQuery] string name, [FromQuery] string path = "", [FromQuery] bool isFolder = false) {
             try {
                 var fullPath = ResolvePath(path);
-                var itemPath = Path.Combine(fullPath, name);
+                var itemPath = ResolveItemPath(fullPath, name);
 
                 if (isFolder) {
                     if (!Directory.Exists(itemPath)) {
@@ -212,8 +219,8 @@ namespace TestProject.Controllers {
             try {
                 var fullFromPath = ResolvePath(fromPath);
                 var fullToPath = ResolvePath(toPath);
-                var itemPath = Path.Combine(fullFromPath, name);
-                var destPath = Path.Combine(fullToPath, name);
+                var itemPath = ResolveItemPath(fullFromPath, name);
+                var destPath = ResolveItemPath(fullToPath, name);
 
                 if (isFolder) {
                     if (!Directory.Exists(itemPath)) {
@@ -241,8 +248,8 @@ namespace TestProject.Controllers {
             try {
                 var fullFromPath = ResolvePath(fromPath);
                 var fullToPath = ResolvePath(toPath);
-                var itemPath = Path.Combine(fullFromPath, name);
-                var destPath = Path.Combine(fullToPath, name);
+                var itemPath = ResolveItemPath(fullFromPath, name);
+                var destPath = ResolveItemPath(fullToPath, name);
 
                 if (isFolder) {
                     if (!Directory.Exists(itemPath)) {
@@ -276,7 +283,7 @@ namespace TestProject.Controllers {
                 }
 
                 var fullPath = ResolvePath(path);
-                var newFolderPath = Path.Combine(fullPath, folderName);
+                var newFolderPath = ResolveItemPath(fullPath, folderName);
 
                 if (Directory.Exists(newFolderPath))
                 {
@@ -294,18 +301,46 @@ namespace TestProject.Controllers {
             }
         }
 
-        private string ResolvePath(string relativePath)
+        // Windows and macOS file systems are case-insensitive by default; Linux is not, so a
+        // case-insensitive comparison there would treat a different directory as "home".
+        private static readonly StringComparison PathComparison =
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+
+        private static readonly char[] InvalidNameChars =
+            [.. Path.GetInvalidFileNameChars().Union(['/', '\\'])];
+
+        private string HomeRoot => Path.TrimEndingDirectorySeparator(Path.GetFullPath(_homeDirectory));
+
+        /// <summary>
+        /// True when <paramref name="fullPath"/> is the home directory or inside it. Compares on a
+        /// directory boundary so a sibling such as "/data/home-evil" does not match "/data/home".
+        /// </summary>
+        private bool IsWithinHome(string fullPath)
         {
-            if (string.IsNullOrWhiteSpace(relativePath) || relativePath == "/")
+            var home = HomeRoot;
+            if (fullPath.Equals(home, PathComparison))
             {
-                return Path.GetFullPath(_homeDirectory);
+                return true;
             }
 
-            var fullPath = Path.Combine(_homeDirectory, relativePath.TrimStart('/'));
-            var resolvedPath = Path.GetFullPath(fullPath);
-            var normalizedHome = Path.GetFullPath(_homeDirectory);
+            var prefix = Path.EndsInDirectorySeparator(home) ? home : home + Path.DirectorySeparatorChar;
+            return fullPath.StartsWith(prefix, PathComparison);
+        }
 
-            if (!resolvedPath.StartsWith(normalizedHome, StringComparison.OrdinalIgnoreCase))
+        /// <summary>Resolves a directory path relative to the home directory.</summary>
+        private string ResolvePath(string? relativePath)
+        {
+            var home = HomeRoot;
+            if (string.IsNullOrWhiteSpace(relativePath) || relativePath == "/")
+            {
+                return home;
+            }
+
+            var resolvedPath = Path.GetFullPath(Path.Combine(home, relativePath.TrimStart('/', '\\')));
+
+            if (!IsWithinHome(resolvedPath))
             {
                 throw new UnauthorizedAccessException("Access to this path is not allowed");
             }
@@ -313,10 +348,32 @@ namespace TestProject.Controllers {
             return resolvedPath;
         }
 
+        /// <summary>
+        /// Resolves a single file or folder name inside an already-resolved directory. The name must
+        /// be one path segment: no separators, no "." or "..", and the result must stay inside home.
+        /// </summary>
+        private string ResolveItemPath(string directory, string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name) || name is "." or ".." || name.IndexOfAny(InvalidNameChars) >= 0)
+            {
+                throw new ArgumentException("Invalid file or folder name");
+            }
+
+            var itemPath = Path.GetFullPath(Path.Combine(directory, name));
+
+            // GetFullPath can still collapse odd names (e.g. Windows trims trailing dots), so re-check.
+            if (!IsWithinHome(itemPath) || itemPath.Equals(HomeRoot, PathComparison))
+            {
+                throw new UnauthorizedAccessException("Access to this path is not allowed");
+            }
+
+            return itemPath;
+        }
+
         private string GetRelativePath(string fullPath)
         {
-            var normalizedHome = Path.GetFullPath(_homeDirectory);
-            if (fullPath.StartsWith(normalizedHome, StringComparison.OrdinalIgnoreCase))
+            var normalizedHome = HomeRoot;
+            if (IsWithinHome(fullPath))
             {
                 return fullPath[normalizedHome.Length..].TrimStart('\\', '/').Replace("\\", "/");
             }
